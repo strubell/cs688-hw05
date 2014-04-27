@@ -25,7 +25,7 @@ t = 100  # number of training iterations
 k = 10 # number of hidden units
 b = 100 # number of batches of data cases
 c = 100 # number of Gibbs chains
-alpha = 0.6  # step size
+alpha = 0.5  # step size
 lam = 0.0001 # regularization param
 
 print "Training model on %d%% of data for validation..." % (train_split)
