@@ -1,11 +1,11 @@
 '''
-CS688 HW05: Restricted Boltzmann Machine for binary classification
+CS688 HW05: Restricted Boltzmann Machine for predicting missing data
 
 Utilities for loading data
 
 @author: Emma Strubell
 '''
-
+from __future__ import division
 import numpy as np
 
 max_train_size = 10000
@@ -20,8 +20,9 @@ def load_params(type): return np.loadtxt("%s%s.txt" % (model_dir, type))
 
 # load data into numpy array, ignoring missing values (test set)
 def load_data(type, num_lines=0): 
-    raw_data = np.genfromtxt("%s%s.txt" % (data_dir, type), usecols=range(101), skip_footer=(max_train_size if type == "train" else max_test_size)-num_lines)
-    return np.array(filter(lambda x: x[100] != -1, raw_data))[:,:-1]
+    return np.genfromtxt("%s%s.txt" % (data_dir, type), skip_footer=(max_train_size if type == "train" else max_test_size)-num_lines)
+#     raw_data = np.genfromtxt("%s%s.txt" % (data_dir, type), usecols=range(101), skip_footer=(max_train_size if type == "train" else max_test_size)-num_lines)
+#     return np.array(filter(lambda x: x[100] != -1, raw_data))[:,:-1]
 
 # load data labels into numpy array, ignoring missing values (test set)
 def load_labels(type, num_lines=0):
@@ -35,6 +36,13 @@ def load_words(): return readlines(word_file)
 
 # write trained parameter (model) files
 def write_params(vec, name): np.savetxt(model_dir+name+".txt", vec)
+
+# get a random train/test split of the given data with given proportions
+def get_split(data, train_split):
+    np.random.seed(0)
+    np.random.shuffle(data)
+    portion = int(train_split*len(data))
+    return data[:portion], data[portion:]
 
 # write labeled feature vectors in SVMlight sparse format
 def write_svmlight(features, labels, fname):

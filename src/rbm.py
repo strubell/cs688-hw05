@@ -1,5 +1,5 @@
 '''
-CS688 HW05: Restricted Boltzmann Machine for binary classification
+CS688 HW05: Restricted Boltzmann Machine for predicting missing data
 
 Implementation of block Gibbs sampling / RBM training using mini-batch
 stochastic gradient ascent
@@ -75,10 +75,42 @@ def train_rbm(data, t, k, b, c, alpha, lam):
             w_p += alpha*(g_wp_pos/n_b - g_wp_neg/c - lam*w_p)
     return w_c, w_b, w_p, xs
 
-# embed the given data instances into the lower-dimensional space defined
-# by the given model parameters
-def compute_embeddings(w_c, w_b, w_p, data):
-    return sigmoid(w_b+np.transpose(np.array(np.matrix(w_p)*data.transpose())))
+def compute_marginals(w_c, w_b, w_p, data):
+    hiddens = sigmoid(w_b+np.transpose(np.array(np.matrix(w_p)*data.transpose())))
+    return sigmoid(w_c+np.array(np.matrix(hiddens)*w_p))
+
+# Return log marginals for missing values in data, signified by -1s
+def predict(w_c, w_b, w_p, data):
+    # get missing indices
+    missing = np.where(data == -1)
+    
+    # set missing values to 0
+    data_masked = np.copy(data)
+    data_masked[missing] = 0
+    
+    # return log marginals of missing values
+    return compute_marginals(w_c, w_b, w_p, data_masked)
+    
+# this is complete data; remove missing% of values, predict them
+# and return prediction accuracy
+def test(w_c, w_b, w_p, data, missing):
+    # generate random indices to remove
+    rows, cols = data.shape
+    np.random.seed(0)
+    
+    # remove random values from data
+    data_missing = np.copy(data)
+    rands = np.random.rand(rows*cols)
+    mask = [0 if rands[i] < missing else 1 for i in range(len(rands))]
+    data_missing *= np.reshape(mask, (rows,cols))
+    
+    # compute marginals
+    marginals = predict(w_c, w_b, w_p, data_missing).flatten()
+    
+    # compute accuracy
+    data_flat = data.flatten()
+    accuracy = np.sum([1.0 if m == 0 and data_flat[i] == (1 if marginals[i] > 0.5 else 0) else 0.0 for i,m in enumerate(mask)])/np.sum(np.logical_not(mask))
+    return accuracy
 
 # sigmoid/logistic function: f(x) = 1/(1+exp(-x))
 def sigmoid(x): return 1/(1+np.exp(-x))
