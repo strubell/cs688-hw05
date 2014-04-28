@@ -75,41 +75,72 @@ def train_rbm(data, t, k, b, c, alpha, lam):
             w_p += alpha*(g_wp_pos/n_b - g_wp_neg/c - lam*w_p)
     return w_c, w_b, w_p, xs
 
-def compute_marginals(w_c, w_b, w_p, data):
-    hiddens = sigmoid(w_b+np.transpose(np.array(np.matrix(w_p)*data.transpose())))
+def compute_marginals(w_c, w_b, w_p, data, missing_indices):
+    xs = data
+    for i in range(4):
+        new_hs = sigmoid(w_b+np.transpose(np.array(np.matrix(w_p)*xs.transpose())))
+        hiddens = np.where(new_hs > 0.5, 1.0, 0.0)
+        new_xs = sigmoid(w_c+np.array(np.matrix(hiddens)*w_p))
+        xs[missing_indices] = np.where(new_xs > 0.5, 1.0, 0.0)[missing_indices]
+    
+    # one last iteration, then return marginals
+    new_hs = sigmoid(w_b+np.transpose(np.array(np.matrix(w_p)*xs.transpose())))
+    hiddens = np.where(new_hs > 0.5, 1.0, 0.0)
     return sigmoid(w_c+np.array(np.matrix(hiddens)*w_p))
 
 # Return log marginals for missing values in data, signified by -1s
-def predict(w_c, w_b, w_p, data):
+def predict(w_c, w_b, w_p, data, missing_indices=None):
     # get missing indices
-    missing = np.where(data == -1)
+    if missing_indices == None:
+        missing_indices = np.where(data == -1)
     
     # set missing values to 0
     data_masked = np.copy(data)
-    data_masked[missing] = 0
+    data_masked[missing_indices] = 0
     
     # return log marginals of missing values
-    return compute_marginals(w_c, w_b, w_p, data_masked)
+    return compute_marginals(w_c, w_b, w_p, data_masked, missing_indices)
     
 # this is complete data; remove missing% of values, predict them
 # and return prediction accuracy
-def test(w_c, w_b, w_p, data, missing):
+def test(w_c, w_b, w_p, data, missing_proportion):
     # generate random indices to remove
     rows, cols = data.shape
     np.random.seed(0)
     
     # remove random values from data
     data_missing = np.copy(data)
-    rands = np.random.rand(rows*cols)
-    mask = [0 if rands[i] < missing else 1 for i in range(len(rands))]
-    data_missing *= np.reshape(mask, (rows,cols))
+    rands = np.random.rand(rows, cols)
+    mask = np.where(rands < missing_proportion, 0.0, 1.0)
+    data_missing *= mask
     
     # compute marginals
-    marginals = predict(w_c, w_b, w_p, data_missing).flatten()
+    missing_indices = np.where(mask == 0)
+    marginals = predict(w_c, w_b, w_p, data_missing, missing_indices)
+    prediction = np.where(marginals > 0.5, 1.0, 0.0)
     
-    # compute accuracy
-    data_flat = data.flatten()
-    accuracy = np.sum([1.0 if m == 0 and data_flat[i] == (1 if marginals[i] > 0.5 else 0) else 0.0 for i,m in enumerate(mask)])/np.sum(np.logical_not(mask))
+    count_1s = 0
+    total_1s = 0
+    count_0s = 0
+    total_0s = 0
+    total = 0
+    flat_mask = mask.flatten()
+    flat_data = data.flatten()
+    for i,p in enumerate(prediction.flatten()):
+        if(flat_mask[i] == 0):
+            if(flat_data[i] == 1):
+                total_1s += 1
+                if(p == 1):
+                    count_1s += 1
+            elif(flat_data[i] == 0):
+                total_0s += 1
+                if(p == 0):
+                    count_0s += 1
+            total += 1
+    accuracy = (count_1s + count_0s)/total
+    print "0s: %d / %d = %g" % (count_0s, total_0s, count_0s/total_0s)
+    print "1s: %d / %d = %g" % (count_1s, total_1s, count_1s/total_1s)
+
     return accuracy
 
 # sigmoid/logistic function: f(x) = 1/(1+exp(-x))

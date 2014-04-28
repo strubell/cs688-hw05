@@ -15,7 +15,7 @@ train_size = load.max_train_size
 test_size = load.max_test_size
 train_split = 60
  
-train_full_model = False
+train_full_model = True
 
 print "Loading %d/%d training instances" % (train_size, load.max_train_size)
 train_instances = load.load_data('train', train_size)
