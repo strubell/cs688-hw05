@@ -36,7 +36,7 @@ def block_gibbs_sample(w_p, w_b, w_c, d, k, iters, message="", verbose=False):
 
 # train parameters for the given number of iteration using the given
 # learning rate and regularization parameter
-def train_rbm(data, t, k, b, c, alpha, lam):
+def train_rbm(data, t, k, b, c, alpha, lam, test_data=None):
     n_b, d = data.shape
     n_b //= b
     
@@ -48,6 +48,7 @@ def train_rbm(data, t, k, b, c, alpha, lam):
     w_b = np.random.normal(0.0, 0.01, k)
     w_c = np.random.normal(0.0, 0.01, d)
     w_p = np.random.normal(0.0, 0.01, (k,d))
+    errors = np.empty(t)
     
     for iter in range(t):
         print "Training iteration %d/%d" % (iter+1, t)
@@ -73,7 +74,28 @@ def train_rbm(data, t, k, b, c, alpha, lam):
             w_c += alpha*(g_wc_pos/n_b - g_wc_neg/c - lam*w_c)
             w_b += alpha*(g_wb_pos/n_b - g_wb_neg/c - lam*w_b)
             w_p += alpha*(g_wp_pos/n_b - g_wp_neg/c - lam*w_p)
-    return w_c, w_b, w_p, xs
+        errors[iter] = test_error(w_c, w_b, w_p, test_data, 0.2)
+    return w_c, w_b, w_p, xs, errors
+
+def test_error(w_c, w_b, w_p, data, missing_proportion):
+    # generate random indices to remove
+    rows, cols = data.shape
+    np.random.seed(0)
+    
+    # remove random values from data
+    data_missing = np.copy(data)
+    rands = np.random.rand(rows, cols)
+    mask = np.where(rands < missing_proportion, 0.0, 1.0)
+    data_missing *= mask
+    
+    # compute marginals
+    missing_indices = np.where(mask == 0)
+    marginals = predict(w_c, w_b, w_p, data_missing, missing_indices)
+    prediction = np.where(marginals > 0.5, 1.0, 0.0)
+    
+    error = np.sum(np.where(prediction[missing_indices] != data[missing_indices], 1.0, 0.0))/np.sum(np.logical_not(mask))
+    print "Error:", error
+    return error
 
 def compute_marginals(w_c, w_b, w_p, data, missing_indices):
     xs = data

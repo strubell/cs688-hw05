@@ -6,6 +6,8 @@
 \usepackage{lastpage}
 \usepackage{chngpage}
 \usepackage{graphicx}
+\usepackage{algorithmic}
+\usepackage{algorithm}
 \usepackage[protrusion=true,expansion,kerning]{microtype}
 \usepackage{url}
 
@@ -36,9 +38,157 @@
 \renewcommand\headrulewidth{0.4pt}
 \renewcommand\footrulewidth{0.4pt}
 
+\newcommand{\argmax}{\mathop{\arg\max}}
+\newcommand{\deriv}[2]{\frac{\partial{#1}}{\partial {#2}} }
+\newcommand{\dsep}{\mbox{dsep}}
+\newcommand{\Pa}{\mathop{Pa}}
+\newcommand{\ND}{\mbox{ND}}
+\newcommand{\De}{\mbox{De}}
+\newcommand{\Ch}{\mbox{Ch}}
+\newcommand{\graphG}{{\mathcal{G}}}
+\newcommand{\graphH}{{\mathcal{H}}}
+\newcommand{\setA}{\mathcal{A}}
+\newcommand{\setB}{\mathcal{B}}
+\newcommand{\setS}{\mathcal{S}}
+\newcommand{\setV}{\mathcal{V}}
+\DeclareMathOperator*{\union}{\bigcup}
+\DeclareMathOperator*{\intersection}{\bigcap}
+\DeclareMathOperator*{\Val}{Val}
+\newcommand{\mbf}[1]{{\mathbf{#1}}}
+\newcommand{\eq}{\!=\!}
+\newcommand{\cut}[1]{{}}
+
 \allowdisplaybreaks
 
 \begin{document}
 \begin{enumerate}
 \item % Question 1
+\begin{enumerate}
+\item 
+I selected a binary restricted Boltzmann machine (RBM) for this task. The RBM is a type of Markov network with two layers of variables that are each fully connected with the other in a bipartite graph, i.e. each variable in one layer is connected to each variable in the other layer but not with any other variable within its own layer. One layer represents observed or ``visible'' variables and the other represents latent or ``hidden'' variables which are not observed. This model has three sets of parameters: $W^P$ encodes the pairwise weights between the visible and hidden units, and $W^B$ and $W^C$ act as a bias controlling the propensity for the hidden and visible units, repsectively, to be ``on.''
+
+I initially selected this model because I thought we would be performing a classification task, classifying sparse binary vectors into the four newsgroup classes based on the occurrence of words in the original text, as specified by the binary vectors. So, the original criteria that I used for selecting the model was high-accuracy classification and speed of implementation (since I had already implemented the RBM). If our task was classification, I think that an RBM would perform well since the hidden layer would represent a lower-dimensional ``embedding'' of the sparse binary data that, ideally, would be a dense, lower-dimensional encoding of the sparse binary data that would be able to better distinguish between the four classes using the binary data. Similar dense, relatively low-dimensional embeddings have been shown to perform well in settings such as various text classification tasks, which tend to deal with large, sparse feature vectors. This problem seemed similar.
+
+Once I saw that the task was predicting marginals for missing data, I realized that the RBM was probably not an excellent choice, but it was too late; I had already invested time into this model. In retrospect I would probably have chosen something like smoothed naive Bayes; although simple (to conceptualize and to implement) naive Bayes has proven successful at similar tasks, and it seems reasonable to assume independence between the non-class-label features, since many of the words represented by these vectors would do a good job independently predicting the others. I still think the RBM is a reasonable model for assuming some relationships between the visible units via the lower-dimensional hidden layer. I found that a hidden layer with just a little more than twice as many units as the data had labels performed the best, which makes sense intuitively, since the units likely represent the label classes and overlap between them. 
+
+\item
+The joint distribution for my model, in terms of the hidden variables $H$ and visible units $X$ and with respect to parameters $W$, is:
+\begin{align*}
+P_W(X=x,H=h) = \frac{\exp(-E_W(x,h))}{\sum_{x'}\sum_{h'}\exp(-E_W(x',h'))}
+\end{align*}
+Where the energy function $E_W$ is given by:
+\begin{align*}
+E_W(x,h) = -\sum_{d=1}^D\sum_{k=1}^KW^P_{dk}x_dh_k-\sum_{k=1}^KW^B_kh_k-\sum_{d=1}^DW^C_dx_d
+\end{align*}
+where $D$ is the number of visible units and $K$ is the number of hidden units.
+
+\item
+My model contains three sets of parameters as explained above: a $D\times K$ matrix $W^P$, a vector of length $K$, $W^B$, and a vector of length $D$, $W^C$. My learning algorithm, mini-batch stochastic gradient ascent, also requires some hyperparameters: a learning rate, $\alpha$ and a regularization constant $\lambda$. The number of hidden units, $K$, itself is also a hyperparameter since it is not directly determined by the size of the data, and the mini-batch batch size could also be considered a hyperparameter that, along with $\alpha$, would determine the speed of convergence. Additional hyperparameters are the number of Gibbs chains used during training. I do not consider the number of iterations (during training or inference) to be hyperparameters since, as long as they are large enough, the values will converge. My model has many hyperparameters, which is unpleasant.
+
+\end{enumerate}
+
+\item % Question 2
+\begin{enumerate}
+\item
+I chose mini-batch stochastic gradient ascent to learn the parameters for my model. My criteria for selecting a learning algorithm were speed and correctness. In this algorithm we perform one step in the direction of the gradient by taking one sample from each of a number of Gibbs chains per iteration to approxmate the hidden marginals given the visible and \emph{vice versa}. Because of the lack of connectivity between layers, this algorithm is relatively fast since we can sample all the variables in each layer at a time, and instead of taking a number of samples from a new Gibbs chain at each iteration, we take one sample from a numbr of chains to get a better approximation at each iteration, which works as long as the learning rate $\alpha$ is small. One other reasonable option would be contrastive divergence, but I prefer the well-foundedness of stochastic gradient ascent via Gibbs sampling. The division of the training data into batches speeds convergence. 
+
+I discussed the hyperparameters above. I selected them using an ad-hoc grid-like search in which I varied each parameter that I felt could use tuning within a reasonable range (e.g. $K$ between 5 and 100) until finding its approximate best value given the other parameters, for the learning rate, iterations, number of hidden units, and number of Gibbs chains, starting with the parameters from the last assignment. I determined ``best'' as achieving the highest accuracy on test data derived from a 60/40 split of the training data, and removing 20\% of the values in the test portion uniformly at random. I ended up performing 100 iterations, using 10 hidden units, dividing the data into 100 batches, using learning rate 0.5, using 100 Gibbs chains, and regularization constant 0.0001. 
+
+\item
+The following pseudocode describes the learning algorithm that I used. It is exactly the same as the mini-batch stochastic gradient ascent used in the last homework. I vectorized the operations so that the only for loop in my code was over batches. This is so that the algorithm would be fast in Python, an interpreted language.
+
+\begin{algorithm}
+\begin{algorithmic}
+\STATE $RBMLearn(\mbf{x}_{1:N},T,B,C,K,\alpha,\lambda)$
+\STATE \#Initialize the Gibbs chains
+\FOR{$c$ from $1$ to $C$}
+\STATE \textbf{for} $k$ from $1$ to $K$ \textbf{do} Initialize $\tilde{h}_{ck}$ to a random binary value \textbf{end}
+\ENDFOR
+\STATE \#Initialize the parameters
+\STATE \textbf{for} $k$ from $1$ to $K$ \textbf{do} Initialize $W^B_{k} \sim \mathcal{N}(0,0.1^2)$ \textbf{end}
+\STATE \textbf{for} $d$ from $1$ to $D$ \textbf{do} Initialize $W^C_{d} \sim \mathcal{N}(0,0.1^2)$ \textbf{end}
+\FOR{$k$ from $1$ to $K$}
+\STATE \textbf{for} $d$ from $1$ to $D$ \textbf{do} Initialize $W^P_{dk} \sim \mathcal{N}(0,0.1^2)$ \textbf{end}
+\ENDFOR
+\FOR{$t$ from $1$ to $T$}
+  \FOR{$b$ from $1$ to $B$}
+    \STATE \#Compute positive gradient contribution from each data case in batch b
+    \STATE $gWC^+ \leftarrow 0, gWB^+ \leftarrow 0, gWP^+\leftarrow 0$
+    \FOR{$n$ from $1+(b-1)N_B$ to $bN_B$}
+      \STATE  \textbf{for} $d$ from $1$ to $D$ \textbf{do} $gWC_{d}^+ \leftarrow gWC_{d}^+ + x_{nd}$ \textbf{end}
+      \FOR{$k$ from $1$ to $K$}
+        \STATE  $p_k \leftarrow P_W(H_k=1|\mbf{X}=\mbf{x}_n)$
+        \STATE  $gWB_{k}^+ \leftarrow gWB_{k}^+ + p_k$
+        \STATE  \textbf{for} $d$ from $1$ to $D$ \textbf{do} $gWP_{dk}^+ \leftarrow gWP_{dk}^+ + x_{nd}p_k$ \textbf{end}
+      \ENDFOR
+    \ENDFOR
+    \STATE \#Compute negative gradient contribution from each chain and sample states
+    \STATE $gWC^- \leftarrow 0, gWB^- \leftarrow 0, gWP^-\leftarrow 0$
+    \FOR{$c$ from $1$ to $C$}
+      \STATE \textbf{for} $d$ from $1$ to $D$ \textbf{do} $\tilde{x}_{cd} \sim P_W(X_d|\mbf{H}=\tilde{\mbf{h}}_c)$ \textbf{end}
+      \STATE \textbf{for} $k$ from $1$ to $K$ \textbf{do} $\tilde{h}_{ck} \sim P_W(H_k|\mbf{X}=\tilde{\mbf{x}}_c)$ \textbf{end}
+      \STATE  \textbf{for} $d$ from $1$ to $D$ \textbf{do} $gWC_{d}^- \leftarrow gWC_{d}^- + \tilde{x}_{cd}$ \textbf{end}
+      \FOR{$k$ from $1$ to $K$}
+        \STATE  $p_k \leftarrow P_W(H_k=1|\mbf{X}=\tilde{\mbf{x}}_c)$
+        \STATE  $gWB_{k}^- \leftarrow gWB_{k}^- + p_k$
+        \STATE  \textbf{for} $d$ from $1$ to $D$ \textbf{do}
+            $gWP_{dk}^- \leftarrow gWP_{dk}^- + \tilde{x}_{cd}p_k$ \textbf{end}
+      \ENDFOR
+    \ENDFOR
+      \STATE \#Take a gradient step for each parameter in the model
+      \STATE   \textbf{for} $d$ from $1$ to $D$ \textbf{do}  $W^C_d \leftarrow W^C_d +  \alpha\left(\frac{gWC_{d}^+}{N_B} - 
+               \frac{gWC_{d}^-}{C} -\lambda W^C_d\right)$ \textbf{end}
+      \FOR{$k$ from $1$ to $K$}
+        \STATE  $W^B_k \leftarrow W^B_k +  \alpha\left(\frac{gWB_{k}^+}{N_B} - \frac{gWB_{k}^-}{C} -\lambda W^B_k\right)$
+        \STATE   \textbf{for} $d$ from $1$ to $D$ \textbf{do}  $W^P_{dk} \leftarrow W^P_{dk} +  \alpha\left(\frac{gWP_{dk}^+}{N_B} - \frac{gWP_{dk}^-}{C} -\lambda W^P_{dk}\right)$ \textbf{end}
+      \ENDFOR
+  \ENDFOR
+\ENDFOR
+\STATE Return $W^P,W^B,W^C$
+\end{algorithmic}
+\caption{Mini-batch stochastic gradient ascent for the RBM model}
+\label{learning}
+\end{algorithm}
+
+\item
+The complexity for a single training iteration in terms of the number of data cases $N$, the number of chains $C$, the number of hidden units $K$ and the number of visible variables $D$ is:
+\begin{align*}
+N(2D+2KD+C(2D+K+KD))
+\end{align*}
+
+\item
+The following is a plot of error over training iterations using a 60/40 split of the training data, removing 20\% of the test data uniformly at random. Error is measured as the number of incorrect predictions divided by the total number of missing data elements. The error clearly converges and starts fluctuating around 0.0435.
+\begin{center}
+\includegraphics[scale=0.7]{train-error-plot}
+\end{center}
+
+\end{enumerate}
+
+\item % Question 3
+\begin{enumerate}
+\item
+I used block Gibbs sampling to perform inference. This algorithm works by iterating between sampling the hidden values given the observed values and the learned model parameters, and sampling the missing values given the hiddens. My criteria were correctness and speed. Block Gibbs sampling, due to this nice RBM structure, is a very fast approximate inference algorithm that gives good results. I sampled to get only the missing values, keeping the observed values the same at each iteration, finding that the values would converge after only about 5 iterations of sampling.
+
+\item
+The following pseudocode describes the algorithm I used for inference. It is essentially the same block Gibbs sampling used in the last homework, except I clamp the known observed values $x$, initialize the $n$ missing values $m$ to 0, and only update the missing values at each iteration. I performed 5 iterations of sampling. This returns the marginals, which I logged to get the log marginals in my submitted \texttt{marginals.txt} file.
+
+\begin{algorithm}[h!]
+\begin{algorithmic}
+\STATE $RBMBlockGibbsSample(W^P,W^B,W^C,S,\mbf{x})$
+\STATE \textbf{for} $n$ from $1$ to $N$ Initialize $m_n^0$ to 0
+\FOR{$s$ from $1$ to $S$}
+\STATE \textbf{for} $k$ from $1$ to $K$ Sample $h_k^{s}\sim P_W(H_k=h_k|\mbf{x},\mbf{m}^{s-1})$
+\STATE \textbf{for} $n$ from $1$ to $N$ Sample $m_n^{s}\sim P_W(M_n=m_n|\mbf{h}^{s})$
+\ENDFOR
+\STATE Return $\mbf{m}^1,...,\mbf{m}^S$
+\end{algorithmic}
+\caption{Block Gibbs Sampler for the RBM model}
+\label{inference}
+\end{algorithm}
+
+\end{enumerate}
+\item % Question 4
+The file \texttt{marginals.txt} is included in my zipped code submitted to Moodle.
+
+\end{enumerate}
 \end{document}

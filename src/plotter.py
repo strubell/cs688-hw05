@@ -27,11 +27,10 @@ def plot1(im):
     ax.imshow(im.reshape((28,28)), interpolation='nearest', cmap='gray')
 
 # plot the given time series (in this case energies over iterations)
-def plot_energies(energies):
+def plot_errors(errors):
     fig = plt.figure()
     ax = fig.add_subplot(111)
-    ax.set_title("Energy vs. Sampling Iteration")
+    ax.set_title("Test Error Rate vs. Sampling Iteration")
     ax.set_xlabel("Iteration")
-    ax.set_ylabel("Energy")
-    for es in energies:
-        ax.plot(es)
+    ax.set_ylabel("Error Rate")
+    ax.plot(errors)
